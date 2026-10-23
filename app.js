@@ -1,7 +1,7 @@
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 // Configure these with your Supabase Project URL and publishable key.
-const SUPABASE_URL = 'PASTE_YOUR_PROJECT_URL_HERE';
-const SUPABASE_PUBLISHABLE_KEY = 'PASTE_YOUR_SB_PUBLISHABLE_KEY_HERE';
+const SUPABASE_URL = 'https://kidszibustirvvfkcfbr.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_dal8FoGsYJHQ0LKuxrebTA_-vmBBxbU';
 if (!window.supabase) throw new Error('Supabase library did not load. Check the Supabase script in index.html.');
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const authRoleMap = {
