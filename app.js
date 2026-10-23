@@ -1,11 +1,21 @@
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
-const roles={admin:{name:'Super Admin',role:'Super Administrator',pass:'Admin123!',pages:['Dashboard','Inventory','Purchases','Sales','Accounting','Payroll','Employees','Reports','User Accounts','Audit Log','Settings']},manager:{name:'Store Manager',role:'Manager',pass:'Manager123!',pages:['Dashboard','Inventory','Purchases','Sales','Accounting','Employees','Reports']},inventory:{name:'Inventory Officer',role:'Inventory Officer',pass:'Stock123!',pages:['Dashboard','Inventory','Purchases','Reports']},hr:{name:'HR Officer',role:'HR & Payroll',pass:'Payroll123!',pages:['Dashboard','Payroll','Employees','Reports']},accountant:{name:'Accountant',role:'Accountant',pass:'Books123!',pages:['Dashboard','Sales','Accounting','Reports']}};
+// Configure these with your Supabase Project URL and publishable key.
+const SUPABASE_URL = 'PASTE_YOUR_PROJECT_URL_HERE';
+const SUPABASE_PUBLISHABLE_KEY = 'PASTE_YOUR_SB_PUBLISHABLE_KEY_HERE';
+if (!window.supabase) throw new Error('Supabase library did not load. Check the Supabase script in index.html.');
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+const authRoleMap = {
+  owner_admin: { name: 'Owner / Admin', role: 'Super Administrator', pages: ['Dashboard','Inventory','Purchases','Sales','Accounting','Payroll','Employees','Reports','User Accounts','Audit Log','Settings'] },
+  manager: { name: 'Store Manager', role: 'Manager', pages: ['Dashboard','Inventory','Purchases','Sales','Accounting','Employees','Reports'] },
+  inventory: { name: 'Inventory Officer', role: 'Inventory Officer', pages: ['Dashboard','Inventory','Purchases','Reports'] },
+  accountant: { name: 'Accountant', role: 'Accountant', pages: ['Dashboard','Sales','Accounting','Reports'] },
+  hr: { name: 'HR Officer', role: 'HR & Payroll', pages: ['Dashboard','Payroll','Employees','Reports'] }
+};
 let user=null,page='Dashboard',modalAction=null;
 let db={products:[['HDC-001','Premium blackout curtain','Curtains','Curtain Fabrics Ltd',42,10,1800,2800],['HDC-002','Sheer voile panel','Sheers & Nets','Home Linen Suppliers',8,12,650,1100],['HDC-003','Double curtain rod 2m','Rods & Tracks','Rods & Rails Co.',26,8,900,1450],['HDC-004','Decorative tieback pair','Accessories','Lux Drapery',5,10,300,650],['HDC-005','Roller blind 1m','Blinds & Shades','Home Linen Suppliers',19,6,1200,1950],['HDC-006','Velvet cushion cover','Cushions & Throws','Decor Accents',34,10,420,800]],suppliers:[['Curtain Fabrics Ltd','0712 000 001','sales@curtainfabrics.example',245000],['Rods & Rails Co.','0712 000 002','orders@rodsrails.example',118000],['Home Linen Suppliers','0712 000 003','info@homelinen.example',84500]],employees:[['EMP-001','Jane Wanjiku','Sales','Sales Associate',45000,'Active'],['EMP-002','Brian Otieno','Inventory','Stock Controller',52000,'Active'],['EMP-003','Mary Njeri','Finance','Accounts Assistant',65000,'Active'],['EMP-004','Peter Mwangi','Management','Store Manager',95000,'Active'],['EMP-005','Grace Achieng','HR','HR Officer',60000,'Active']],invoices:[['INV-260131','Curtain Fabrics Ltd','Supplier bill',245000,'2026-10-20','Pending'],['INV-260128','Walk-in customer','Sales invoice',48500,'2026-10-19','Paid'],['INV-260125','Home Linen Suppliers','Supplier bill',84500,'2026-10-18','Pending'],['INV-260119','Corporate customer','Sales invoice',128000,'2026-10-17','Paid']],expenses:[['2026-10-01','Rent',120000,'Monthly shop rent'],['2026-10-06','Utilities',18500,'Electricity and water'],['2026-10-12','Transport',9500,'Supplier collection']],users:[['admin','Super Admin','admin@homestar.example','Super Admin','Active'],['manager','Store Manager','manager@homestar.example','Manager','Active'],['inventory','Inventory Officer','inventory@homestar.example','Inventory Officer','Active'],['hr','HR Officer','hr@homestar.example','HR & Payroll','Active'],['accountant','Accountant','accountant@homestar.example','Accountant','Active']],audit:[],payruns:[]};
 // Restore this browser's demo data and registered accounts.
 try { const saved = localStorage.getItem('homestarSuiteDemo'); if (saved) db = {...db, ...JSON.parse(saved)}; } catch(e) {}
-let registeredAccounts = [];
-try { registeredAccounts = JSON.parse(localStorage.getItem('homestarRegisteredAccounts') || '[]'); } catch(e) {}
+let registeredAccounts = []; // Local demo account creation is disabled when using Supabase Auth.
 const rolePages = {
   'Super Admin':['Dashboard','Inventory','Purchases','Sales','Accounting','Payroll','Employees','Reports','User Accounts','Audit Log','Settings'],
   'Manager':['Dashboard','Inventory','Purchases','Sales','Accounting','Employees','Reports'],
@@ -20,36 +30,67 @@ function enterWorkspace(account) {
   $('#userBadge').textContent = (account.key || account.email || 'USER').toUpperCase() + ' · ' + account.role;
   buildNav(); log('Signed in'); save(); show('Dashboard');
 }
-$('#loginForm').onsubmit=e=>{
+$('#loginForm').onsubmit = async e => {
   e.preventDefault();
-  const k=$('#username').value.trim().toLowerCase(), pass=$('#password').value.trim();
-  const demoKey=Object.keys(roles).find(key=>key.toLowerCase()===k), demo=demoKey?roles[demoKey]:null;
-  if(demo && demo.pass===pass){enterWorkspace({key:demoKey,...demo});return;}
-  const account=registeredAccounts.find(a=>(a.username.toLowerCase()===k||a.email.toLowerCase()===k)&&a.password===pass&&a.status!=='Inactive');
-  if(account){enterWorkspace({key:account.username,name:account.name,role:account.role,pages:rolePages[account.role]||rolePages['Manager'],email:account.email});return;}
-  $('#error').textContent='Sign-in failed. Check your username/email and password, or create the owner account first.';
+  const email = $('#username').value.trim();
+  const password = $('#password').value;
+  $('#error').textContent = 'Signing in...';
+  try {
+    const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    const authUser = data.user;
+    const { data: profile, error: profileError } = await supabaseClient
+      .from('profiles').select('id, full_name, role').eq('id', authUser.id).single();
+    if (profileError) throw profileError;
+    const access = authRoleMap[profile.role];
+    if (!access) {
+      await supabaseClient.auth.signOut();
+      throw new Error('Your account has no active business role. Contact the Homestar owner.');
+    }
+    const account = {
+      key: authUser.id,
+      email: authUser.email,
+      name: profile.full_name || authUser.email,
+      role: access.role,
+      pages: access.pages,
+      databaseRole: profile.role
+    };
+    registeredAccounts = [];
+    $('#error').textContent = '';
+    enterWorkspace(account);
+  } catch (err) {
+    $('#error').textContent = err.message || 'Sign-in failed. Check your email and password.';
+  }
 };
-$('#showSignup').onclick=()=>{
-  $('#loginForm').classList.add('hidden'); $('#signupForm').classList.remove('hidden');
-  const exists=registeredAccounts.some(a=>a.role==='Super Admin');
-  $('#signupIntro').textContent=exists?'Owner account already exists. Ask your Super Admin to create your account.':'Create the first owner account using your business email.';
-  $('#signupForm').querySelectorAll('input,button').forEach(el=>el.disabled=exists);
+
+// Staff registration is invitation-only; public owner signup is intentionally disabled.
+$('#showSignup').onclick = () => {
+  $('#loginForm').classList.add('hidden');
+  $('#signupForm').classList.remove('hidden');
+  $('#signupIntro').textContent = 'Account registration is restricted. Contact the Homestar owner/admin for an invitation.';
+  $('#signupError').textContent = 'You cannot create an owner or staff account from this public page.';
+  $('#signupForm').querySelectorAll('input, button').forEach(el => { el.disabled = true; });
+  $('#showLogin').disabled = false;
 };
-$('#showLogin').onclick=()=>{$('#signupForm').classList.add('hidden');$('#loginForm').classList.remove('hidden');};
-$('#signupForm').onsubmit=e=>{
+$('#showLogin').onclick = () => {
+  $('#signupForm').classList.add('hidden');
+  $('#loginForm').classList.remove('hidden');
+};
+$('#signupForm').onsubmit = e => {
   e.preventDefault();
-  if(registeredAccounts.some(a=>a.role==='Super Admin')){$('#signupError').textContent='An owner account already exists. Ask the Super Admin to create your account.';return;}
-  const name=$('#signupName').value.trim(),email=$('#signupEmail').value.trim().toLowerCase(),username=$('#signupUsername').value.trim().toLowerCase(),password=$('#signupPassword').value;
-  if(!name||!email.includes('@')||!username||password.length<8){$('#signupError').textContent='Enter your name, a valid email, username, and password of at least 8 characters.';return;}
-  if(registeredAccounts.some(a=>a.email===email||a.username.toLowerCase()===username)){$('#signupError').textContent='That email or username is already registered.';return;}
-  const account={name,email,username,password,role:'Super Admin',status:'Active'};
-  registeredAccounts.push(account);localStorage.setItem('homestarRegisteredAccounts',JSON.stringify(registeredAccounts));
-  db.users.push([username,name,email,'Super Admin','Active']);save();
-  $('#signupError').textContent='Account created. You can now sign in with your email or username.';
-  $('#signupForm').classList.add('hidden');$('#loginForm').classList.remove('hidden');$('#username').value=email;$('#password').value='';
+  $('#signupError').textContent = 'Please ask the owner/admin to invite you.';
 };
 function buildNav(){let groups=[['OVERVIEW',['Dashboard']],['OPERATIONS',['Inventory','Purchases','Sales']],['FINANCE & PEOPLE',['Accounting','Payroll','Employees']],['MANAGEMENT',['Reports','User Accounts','Audit Log','Settings']]];$('#nav').innerHTML=groups.map(([g,items])=>`<div class="navlabel">${g}</div>`+items.filter(p=>user.pages.includes(p)).map(p=>`<button data-page="${p}">${({Dashboard:'▦',Inventory:'▧',Purchases:'⇧',Sales:'↗',Accounting:'▤',Payroll:'▣',Employees:'♙',Reports:'▥','User Accounts':'♧','Audit Log':'◷',Settings:'⚙'})[p]}　${p}</button>`).join('')).join('');$$('[data-page]').forEach(b=>b.onclick=()=>show(b.dataset.page))}
-$('#logout').onclick=()=>{log('Signed out');user=null;$('#app').classList.add('hidden');$('#login').classList.remove('hidden');$('#password').value=''};function intro(t,s,buttons=''){return `<div class="intro"><div><h2>${t}</h2><p>${s}</p></div><div class="btns">${buttons}</div></div>`}function stat(l,v,f){return `<article class="stat"><label>${l}</label><strong>${v}</strong><small>${f}</small></article>`}function panel(t,s,body){return `<article class="panel"><h3>${t}</h3><p class="sub">${s}</p>${body}</article>`}function table(h,rows){return `<div class="tablewrap"><table><thead><tr>${h.map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>${rows.length?rows.map(r=>`<tr>${r.map(v=>`<td>${v}</td>`).join('')}</tr>`).join(''):`<tr><td colspan="${h.length}">No records yet.</td></tr>`}</tbody></table></div>`}function badge(s){return `<span class="badge ${/pending|low|inactive/i.test(s)?'warn':''}">${s}</span>`}function search(){return `<div class="tabletools"><input id="search" class="search" placeholder="Search records…"></div>`}function filterTable(id){let x=$('#search');if(x)x.oninput=()=>$$(`#${id} tbody tr`).forEach(r=>r.style.display=r.innerText.toLowerCase().includes(x.value.toLowerCase())?'':'none')}
+$('#logout').onclick = async () => {
+  const { error } = await supabaseClient.auth.signOut();
+  if (error) { toast('Sign-out failed: ' + error.message); return; }
+  user = null;
+  $('#app').classList.add('hidden');
+  $('#login').classList.remove('hidden');
+  $('#password').value = '';
+  $('#username').value = '';
+  $('#error').textContent = '';
+};function intro(t,s,buttons=''){return `<div class="intro"><div><h2>${t}</h2><p>${s}</p></div><div class="btns">${buttons}</div></div>`}function stat(l,v,f){return `<article class="stat"><label>${l}</label><strong>${v}</strong><small>${f}</small></article>`}function panel(t,s,body){return `<article class="panel"><h3>${t}</h3><p class="sub">${s}</p>${body}</article>`}function table(h,rows){return `<div class="tablewrap"><table><thead><tr>${h.map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>${rows.length?rows.map(r=>`<tr>${r.map(v=>`<td>${v}</td>`).join('')}</tr>`).join(''):`<tr><td colspan="${h.length}">No records yet.</td></tr>`}</tbody></table></div>`}function badge(s){return `<span class="badge ${/pending|low|inactive/i.test(s)?'warn':''}">${s}</span>`}function search(){return `<div class="tabletools"><input id="search" class="search" placeholder="Search records…"></div>`}function filterTable(id){let x=$('#search');if(x)x.oninput=()=>$$(`#${id} tbody tr`).forEach(r=>r.style.display=r.innerText.toLowerCase().includes(x.value.toLowerCase())?'':'none')}
 function show(p){page=p;$('#title').textContent=p;$$('[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page===p));let c=$('#content');if(!user.pages.includes(p)){c.innerHTML='<article class="panel">Access restricted for this account.</article>';return}c.innerHTML=({Dashboard:dashboard,Inventory:inventory,Purchases:purchases,Sales:sales,Accounting:accounting,Payroll:payroll,Employees:employees,Reports:reports,'User Accounts':users,'Audit Log':auditPage,Settings:settings}[p]||dashboard)();wire(p)}
 function dashboard(){let low=db.products.filter(x=>x[4]<=x[5]).length,gross=db.employees.filter(x=>x[5]==='Active').reduce((a,x)=>a+x[4],0),pending=db.invoices.filter(x=>x[5]==='Pending').reduce((a,x)=>a+x[3],0);return intro('Welcome back, '+user.name.split(' ')[0],'Here is your business snapshot.',`<button class="btn" data-action="backup">Export data ↓</button>`)+`<div class="stats">${stat('Product SKUs',db.products.length,'Registered inventory items')}${stat('Low stock alerts',low,'Items at reorder level')}${stat('Active employees',db.employees.filter(x=>x[5]==='Active').length,'Employee records')}${stat('Pending bills',money(pending),'Awaiting payment')}</div><div class="grid">${panel('Sales by product segment','Illustrative revenue share',`<div class="donutrow"><div class="donut"><div class="hole"><b>100%</b><small>Sales mix</small></div></div><div class="legend">${[['Curtains',35,'#3169c7'],['Sheers & Nets',22,'#8ea63b'],['Rods & Tracks',18,'#f4c32e'],['Accessories',10,'#e97891'],['Blinds & Shades',8,'#36a79a'],['Cushions',7,'#ed9135']].map(s=>`<div><i class="swatch" style="background:${s[2]}"></i>${s[0]} <b>${s[1]}%</b></div>`).join('')}</div></div>`)}${panel('Inventory at a glance','Units on hand',`<div class="bars">${db.products.slice(0,5).map(x=>`<div class="bar"><span>${x[2]}</span><div class="track"><div class="fill" style="width:${x[4]/42*100}%"></div></div><b>${x[4]}</b></div>`).join('')}</div>`)}</div>${panel('Quick actions','Common business tasks',`<div class="quick"><button data-action="product"><span>＋</span><b>Add product</b><small>Register stock item</small></button><button data-action="expense"><span>↗</span><b>Record expense</b><small>Track business costs</small></button><button data-action="employee"><span>♙</span><b>Add employee</b><small>Update HR records</small></button><button data-page="Reports"><span>▥</span><b>View reports</b><small>Review business data</small></button></div>`)}${panel('Low stock watchlist','Products to consider reordering',table(['SKU','Product','On hand','Reorder level','Status'],db.products.filter(x=>x[4]<=x[5]).map(x=>[x[0],x[1],x[4],x[5],badge('Low stock')])))}`}
 function inventory(){return intro('Inventory management','Products, stock levels, cost prices and reorder alerts.',`<button class="btn primary" data-action="product">＋ Add product</button><button class="btn" data-action="exportProducts">Export CSV</button>`)+`<div class="stats">${stat('Products',db.products.length,'SKUs in catalogue')}${stat('Units on hand',db.products.reduce((a,x)=>a+x[4],0),'All product units')}${stat('Low stock',db.products.filter(x=>x[4]<=x[5]).length,'At or below reorder level')}${stat('Stock cost value',money(db.products.reduce((a,x)=>a+x[4]*x[6],0)),'At recorded unit cost')}</div>${panel('Product catalogue','Search and manage inventory',search()+`<div id="table">${table(['SKU','Product','Category','Supplier','Qty','Cost','Price','Status','Action'],db.products.map(x=>[x[0],x[1],x[2],x[3],x[4],money(x[6]),money(x[7]),badge(x[4]<=x[5]?'Low stock':'In stock'),`<button class="inline" data-adjust="${x[0]}">Adjust stock</button> <button class="inline" data-edit="${x[0]}">Edit</button>`]))}</div>`)}`}
@@ -59,7 +100,7 @@ function accounting(){return intro('Accounting & books','Income, expenses, suppl
 function employees(){return intro('Employees & HR','Employee directory, departments and base salaries.',`<button class="btn primary" data-action="employee">＋ Add employee</button>`)+panel('Employee directory','Search staff records',search()+`<div id="table">${table(['ID','Name','Department','Job title','Monthly base pay','Status','Action'],db.employees.map(x=>[x[0],x[1],x[2],x[3],money(x[4]),badge(x[5]),`<button class="inline" data-editemp="${x[0]}">Edit</button>`]))}</div>`)}
 function payroll(){let staff=db.employees.filter(x=>x[5]==='Active'),gross=staff.reduce((a,x)=>a+x[4],0);return intro('Payroll','Employee salary preview and draft payroll runs.',`<button class="btn" data-action="payrollSettings">Deduction settings</button><button class="btn primary" data-action="runPayroll">＋ Prepare payroll</button>`)+`<div class="notice"><b>Important:</b> The deduction estimate is illustrative only. Verify current Kenya PAYE, NSSF, SHIF, Affordable Housing Levy and other applicable rules with a payroll professional before paying staff.</div><div class="stats">${stat('Active employees',staff.length,'Included in preview')}${stat('Gross monthly pay',money(gross),'Before deductions')}${stat('Illustrative deductions',money(gross*.18),'Planning estimate only — not tax advice')}${stat('Illustrative net pay',money(gross*.82),'Planning estimate only')}</div>`+panel('Payroll preview','Salary and sample 18% deduction estimate',table(['Employee','Department','Gross','Illustrative deductions','Illustrative net'],staff.map(x=>[x[1],x[2],money(x[4]),money(x[4]*.18),money(x[4]*.82)])))+panel('Payroll history','Prepared runs',table(['Period','Employees','Gross','Status'],db.payruns.map(x=>[x[0],x[1],money(x[2]),badge(x[3])])))}
 function reports(){return intro('Reports & insights','Export working data snapshots and review key figures.',`<button class="btn primary" data-action="backup">Download data snapshot</button>`)+`<div class="quick"><button data-action="exportProducts"><span>▧</span><b>Inventory report</b><small>Stock and reorder levels</small></button><button data-action="exportInvoices"><span>▤</span><b>Invoice report</b><small>Sales and supplier bills</small></button><button data-action="exportEmployees"><span>♙</span><b>Staff report</b><small>Employee records</small></button><button data-action="exportExpenses"><span>↘</span><b>Expense report</b><small>Business costs</small></button></div>`}
-function users(){return intro('User accounts','Manage demo user records and default role permissions.',`<button class="btn primary" data-action="newuser">＋ Create user</button>`)+`<div class="notice">Role-based navigation is simulated in this front-end demo and can be bypassed. Real authentication, password hashing and server-side permissions must be built before using confidential data.</div>`+panel('Accounts','Demo user directory',table(['Username','Name','Email','Role','Status'],db.users.map(x=>x.map((v,i)=>i===4?badge(v):v))))+panel('Default role access','Module access matrix',table(['Role','Dashboard','Inventory','Accounting','Payroll','User admin'],[['Super Admin','✓','✓','✓','✓','✓'],['Manager','✓','✓','✓','—','—'],['Inventory Officer','✓','✓','—','—','—'],['Accountant','✓','—','✓','—','—'],['HR & Payroll','✓','—','—','✓','—']]))}
+function users(){return intro('User accounts','Supabase authentication is enabled for sign-in; invitations must be created by the owner/admin through Supabase.', '')+`<div class="notice">The list below is still sample demo data. Creating/inviting users from this page is not connected yet. Do not use this page to create real staff accounts.</div>`+panel('Sample accounts','Demonstration directory only',table(['Username','Name','Email','Role','Status'],db.users.map(x=>x.map((v,i)=>i===4?badge(v):v))))+panel('Default role access','Application navigation by profile role',table(['Role','Dashboard','Inventory','Accounting','Payroll','User admin'],[['Owner / Admin','✓','✓','✓','✓','✓'],['Manager','✓','✓','✓','—','—'],['Inventory Officer','✓','✓','—','—','—'],['Accountant','✓','—','✓','—','—'],['HR & Payroll','✓','—','—','✓','—']]))}
 function auditPage(){return intro('Audit log','Local demo actions recorded during this browser session.',`<button class="btn" data-action="exportAudit">Export log</button>`)+panel('Recent actions','Demo audit trail',table(['Time','User','Action'],db.audit.map(x=>x)))}
 function settings(){return intro('Settings','Business profile and data safety.')+`<div class="grid">${panel('Business profile','Workspace details',`<form id="bizForm" class="fieldgrid"><div class="field full"><label>Business name</label><input id="bizName" value="Homestar Decor Center"></div><div class="field"><label>Currency</label><select><option>KES — Kenyan Shilling</option></select></div><div class="field"><label>Financial year begins</label><select><option>January</option><option>July</option><option>April</option></select></div><div class="field full"><label>Business address</label><input placeholder="Registered address"></div><div class="field full"><button class="primary">Save profile</button></div></form>`)}${panel('Security & data','Prototype status',`<p class="muted-note">Login is simulated in browser JavaScript. There is no server database, secure multi-user authentication, cloud backup or persistent import system in this prototype. Do not enter real payroll or confidential business data.</p><button class="btn" data-action="backup">Download demo backup</button> <button class="btn" data-action="reset">Reset demo data</button>`)}</div>`}
 function openForm(title,fields,callback,note=''){ $('#modalTitle').textContent=title;$('#modalBody').innerHTML=(note?`<p class="muted-note">${note}</p>`:'')+`<form id="recordForm" class="fieldgrid">${fields.map(f=>`<div class="field ${f.full?'full':''}"><label>${f.label}</label>${f.options?`<select id="${f.id}">${f.options.map(x=>`<option>${x}</option>`).join('')}</select>`:`<input id="${f.id}" type="${f.type||'text'}" ${f.required?'required':''} ${f.min!==undefined?`min="${f.min}"`:''} value="${f.value??''}" placeholder="${f.placeholder||''}">`}</div>`).join('')}<div class="field full modal-actions"><button type="button" class="btn" id="cancel">Cancel</button><button class="primary">Save record</button></div></form>`;$('#modal').showModal();$('#cancel').onclick=()=>$('#modal').close();$('#recordForm').onsubmit=e=>{e.preventDefault();let d={};fields.forEach(f=>d[f.id]=$('#'+f.id).value);callback(d);$('#modal').close();log(title+' saved');save();show(page);toast('Saved in demo session')}}
