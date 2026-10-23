@@ -1,3 +1,117 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Homestar Business Suite</title><link rel="stylesheet" href="style.css"></head><body>
-<div id="login" class="login"><section class="hero"><div class="brand">✧ <span>Homestar<small>DECOR CENTER</small></span></div><div><p class="eyebrow">HOMESTAR BUSINESS SUITE</p><h1>Everything your business needs.<br><em>In one place.</em></h1><p>Inventory, accounting, payroll and operations — connected in one workspace.</p></div><small>A better way to run Homestar.</small></section><section class="login-side"><div class="loginbox"><p class="eyebrow">WELCOME BACK</p><h2>Sign in to your workspace</h2><p class="muted">Enter your demo account details to continue.</p><form id="loginForm"><label>Username or email</label><input id="username" required placeholder="Enter username or email"><label>Password</label><input id="password" type="password" required placeholder="Enter password"><button class="primary full">Sign in →</button><p id="error" class="error"></p><p class="muted">First time here? <button type="button" id="showSignup" class="textbutton">Create the first owner account</button></p></form><form id="signupForm" class="hidden"><label>Full name</label><input id="signupName" required placeholder="Your full name"><label>Business email</label><input id="signupEmail" type="email" required placeholder="you@company.com"><label>Username</label><input id="signupUsername" required placeholder="Choose a username"><label>Password (8+ characters)</label><input id="signupPassword" type="password" minlength="8" required placeholder="Create a password"><button class="primary full">Create owner account</button><p id="signupError" class="error"></p><p class="muted">Already registered? <button type="button" id="showLogin" class="textbutton">Return to sign in</button></p></form><div class="demo"><b>Demo accounts</b><p>Super Admin: <code>admin</code> / <code>Admin123!</code></p><p>Manager: <code>manager</code> / <code>Manager123!</code></p><p>Inventory: <code>inventory</code> / <code>Stock123!</code></p><p>HR & Payroll: <code>hr</code> / <code>Payroll123!</code></p><p>Accountant: <code>accountant</code> / <code>Books123!</code></p><small>Public demo credentials only. Never use real passwords.</small></div></div><footer>© 2026 Homestar Decor Center</footer></section></div>
-<div id="app" class="app hidden"><aside class="sidebar"><div class="brand dark">✧ <span>Homestar<small>BUSINESS SUITE</small></span></div><div class="workspace">HOMESTAR DECOR CENTER</div><nav id="nav"></nav><div class="userfoot"><b id="userName">Super Admin</b><small id="userRole">Super Administrator</small><button id="logout">Sign out ↗</button></div></aside><main><header><div><p class="eyebrow">HOMESTAR / WORKSPACE</p><h1 id="title">Dashboard</h1></div><div id="userBadge">SA · Super Admin</div></header><section id="content"></section></main></div><dialog id="modal"><div class="modalhead"><h2 id="modalTitle">New record</h2><button id="closeModal">×</button></div><div id="modalBody"></div></dialog><div id="toast"></div><script src="app.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Homestar Business Suite</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="login" class="login">
+    <section class="hero">
+      <div class="brand">✧ <span>Homestar<small>DECOR CENTER</small></span></div>
+      <div>
+        <p class="eyebrow">HOMESTAR BUSINESS SUITE</p>
+        <h1>Everything your business needs.<br><em>In one place.</em></h1>
+        <p>Inventory, accounting, payroll and operations — connected in one workspace.</p>
+      </div>
+      <small>A better way to run Homestar.</small>
+    </section>
+
+    <section class="login-side">
+      <div class="loginbox">
+        <p class="eyebrow">WELCOME BACK</p>
+        <h2>Sign in to your workspace</h2>
+        <p class="muted">Enter your account details to continue.</p>
+
+        <form id="loginForm">
+          <label for="username">Username or email</label>
+          <input id="username" name="username" required placeholder="Enter username or email">
+
+          <label for="password">Password</label>
+          <input id="password" name="password" type="password" required placeholder="Enter password">
+
+          <button type="submit" class="primary full">Sign in →</button>
+          <p id="error" class="error" role="alert"></p>
+
+          <p class="muted">
+            First time here?
+            <button type="button" id="showSignup" class="textbutton">Create the first owner account</button>
+          </p>
+        </form>
+
+        <form id="signupForm" class="hidden">
+          <p id="signupIntro" class="muted">Create the owner account for your workspace.</p>
+
+          <label for="signupName">Full name</label>
+          <input id="signupName" name="fullName" required placeholder="Your full name">
+
+          <label for="signupEmail">Business email</label>
+          <input id="signupEmail" name="email" type="email" required placeholder="you@company.com">
+
+          <label for="signupUsername">Username</label>
+          <input id="signupUsername" name="username" required placeholder="Choose a username">
+
+          <label for="signupPassword">Password (8+ characters)</label>
+          <input id="signupPassword" name="password" type="password" minlength="8" required placeholder="Create a password">
+
+          <button type="submit" class="primary full">Create owner account</button>
+          <p id="signupError" class="error" role="alert"></p>
+
+          <p class="muted">
+            Already registered?
+            <button type="button" id="showLogin" class="textbutton">Return to sign in</button>
+          </p>
+        </form>
+
+        <div class="demo">
+          <b>Demo accounts</b>
+          <p>Super Admin: <code>admin</code> / <code>Admin123!</code></p>
+          <p>Manager: <code>manager</code> / <code>Manager123!</code></p>
+          <p>Inventory: <code>inventory</code> / <code>Stock123!</code></p>
+          <p>HR &amp; Payroll: <code>hr</code> / <code>Payroll123!</code></p>
+          <p>Accountant: <code>accountant</code> / <code>Books123!</code></p>
+          <small>Public demo credentials only. Never use real passwords.</small>
+        </div>
+      </div>
+      <footer>© 2026 Homestar Decor Center</footer>
+    </section>
+  </div>
+
+  <div id="app" class="app hidden">
+    <aside class="sidebar">
+      <div class="brand dark">✧ <span>Homestar<small>BUSINESS SUITE</small></span></div>
+      <div class="workspace">HOMESTAR DECOR CENTER</div>
+      <nav id="nav"></nav>
+      <div class="userfoot">
+        <b id="userName">Super Admin</b>
+        <small id="userRole">Super Administrator</small>
+        <button id="logout" type="button">Sign out ↗</button>
+      </div>
+    </aside>
+
+    <main>
+      <header>
+        <div>
+          <p class="eyebrow">HOMESTAR / WORKSPACE</p>
+          <h1 id="title">Dashboard</h1>
+        </div>
+        <div id="userBadge">SA · Super Admin</div>
+      </header>
+      <section id="content"></section>
+    </main>
+  </div>
+
+  <dialog id="modal">
+    <div class="modalhead">
+      <h2 id="modalTitle">New record</h2>
+      <button id="closeModal" type="button" aria-label="Close">×</button>
+    </div>
+    <div id="modalBody"></div>
+  </dialog>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
